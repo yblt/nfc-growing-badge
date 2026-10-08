@@ -1,0 +1,9 @@
+#!/bin/sh
+# 提交前红线扫描。启用一次即可：git config core.hooksPath .githooks
+node scripts/redline-check.mjs --staged
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "提交已中止：上面列出的内容不该进 git 历史（push 之后删文件也留在历史里）。"
+  echo "处理：改掉/删掉对应行，或把该文件加入 .gitignore 后重新 add。"
+  exit 1
+fi

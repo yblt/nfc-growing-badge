@@ -1,0 +1,29 @@
+node_modules/
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+.env
+.env.local
+.env.*.local
+*.log
+*.key
+*.pem
+*.p12
+*.pfx
+*.ppk
+*.gguf
+*.zip
+*.exe
+*.bak
+*.tmp
+*.dmp
+.DS_Store
+Thumbs.db
+# 红线扫描的禁词表本身含公司/项目真名，永不入库（模板见 example）
+scripts/redline-words.txt
+# 选型过程的一次性脚本，含写死的本机路径，本机留档不入库
+scripts/_归档/
