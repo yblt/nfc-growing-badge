@@ -8,17 +8,20 @@
 
 | 文件 | 位置 | 说明 |
 |---|---|---|
-| llama.cpp b11270 CPU-x64 | `<LLAMA_DIR>\llama\`（18MB zip 解压） | 官方 GitHub release，纯 CPU 推理 |
+| llama.cpp b11270 CPU-x64 | `<LLAMA_DIR>\llama\`（18MB zip 解压） | 官方 GitHub release，纯 CPU 推理（兜底档） |
+| llama.cpp b11270 Vulkan-x64 | `<LLAMA_DIR>\llama-vulkan\`（36MB zip 解压） | 免 CUDA 工具链，走 Vulkan 卸载到 RTX 3050，当前默认档 |
 | Qwen3-4B-Instruct-2507-Q4_K_M | `<LLAMA_DIR>\`（2382MB） | 对话主力档，ModelScope 拉取 |
 | Qwen3-1.7B-Q8_0 | `<LLAMA_DIR>\`（1749MB） | 摘要/快速档（该仓库只有 Q8_0 一档） |
 
 ## 启动（两个终端）
 
 ```powershell
-# 终端 1：起推理服务（OpenAI 兼容端点，占内存约 3GB）
+# 终端 1：起推理服务
 $env:LLAMA_DIR = '你的模型目录'                    # 不设则用 %USERPROFILE%\llama
-powershell -File scripts/run-llama.ps1             # 4B，默认端口 8080
-powershell -File scripts/run-llama.ps1 -Model 1.7b # 换小档
+powershell -File scripts/run-llama.ps1                          # 默认 Vulkan + -ngl 24
+powershell -File scripts/run-llama.ps1 -GpuLayers 99            # 极限提速（显存吃紧时慎用）
+powershell -File scripts/run-llama.ps1 -Backend cpu             # 回退纯 CPU
+powershell -File scripts/run-llama.ps1 -Model 1.7b              # 换小档
 
 # 终端 2：起应用（读 .env → LLM_BASE_URL=http://localhost:8080/v1）
 npm run dev   # http://localhost:3000
@@ -26,16 +29,26 @@ npm run dev   # http://localhost:3000
 
 验证：`curl http://127.0.0.1:8080/health` 返回 `{"status":"ok"}`；`npm run smoke:inference` 1–5 秒出回复。
 
-## 实测性能（5800H 8 核 CPU 推理）
+## 实测性能（5800H + RTX 3050 4GB，2026-10-09 A/B）
 
-- 4B Q4 短回复（30–40 token）：1.4–4 秒，开发体验够用
-- llama-server 接受请求体里的额外 `think` 参数，不报 400
+同一句话（"我今天加班到十一点，好累啊"，max_tokens 80），3–4 次取均值：
+
+| 档 | 短回复延迟 | 吞吐 | 显存占用（含 Windows 桌面） |
+|---|---|---|---|
+| CPU（-ngl 0） | 3.9–4.3s | 7.6–13.3 tok/s | 0（占 ~3GB 内存） |
+| Vulkan -ngl 18 | 1.5–2.1s | 15–19 tok/s | 2514 / 4096 MiB |
+| Vulkan -ngl 24（默认） | ~0.9–2.4s | 中 | 2945 / 4096 MiB |
+| Vulkan -ngl 99（全卸载） | 0.9–1.8s | 32–46 tok/s | 3316 / 4096 MiB（81%，慎用） |
+
+结论：**默认 -ngl 24** —— 比纯 CPU 快 2–3x，显存留 ~1.1GB 余量给桌面/浏览器，日常最稳。想要极致快且当时不跑游戏/Chrome 硬件加速，临时 `-GpuLayers 99`（快 ~4x，但 -c 4096 上下文吃满时接近显存上限，手动 -ngl 会让 llama 不再自适应，溢出即崩）。跑游戏或渲染时改 `-Backend cpu` 或 `-GpuLayers 0` 让出显存。
+
+补充：llama-server 接受请求体里的额外 `think` 参数，不报 400。
 
 ## 常见操作
 
 - **换模型档**：改 `.env` 的 `LLM_MODEL` 仅影响显示名（llama-server 不校验）；真正换档是重启 run-llama.ps1 加 `-Model 1.7b`。
 - **后台常驻**：`llama-server.exe --host 127.0.0.1 --port 8080 -m <gguf> --jinja -t 8 -c 4096`。
-- **GPU 加速（以后想提速再做）**：RTX 3050 4GB 装不下 4B Q4+上下文，收益有限；若做，取 Vulkan 版 zip（32MB），同端口直接替换，代码零改动。
+- **GPU 加速（已启用）**：Vulkan 版免 CUDA，`-ngl` 控制卸载层数，默认 24，见上表；代码零改动（同端口 8080、同 OpenAI 端点）。
 
 ## 故障速查
 
